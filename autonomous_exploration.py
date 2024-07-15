@@ -1,139 +1,235 @@
 import pygame
-import numpy as np
 import math
-import time
-
-# Initialize Pygame
-pygame.init()
 
 # Constants
-WIDTH, HEIGHT = 400, 400
-GRID_SIZE = 10
-CELL_SIZE = WIDTH // GRID_SIZE
-LINE_WIDTH = 5
-FPS = 60
+WIDTH, HEIGHT = 1000, 600
+ROBOT_RADIUS = 10
+OBSTACLE_SIZE = 50
+ACCELERATION = 0.5
+FRICTION = 0.98
+UI_WIDTH = 200
+VISOR_RADIUS = 100
+VISOR_ANGLE = 100
+NUM_LINES = 20  # Number of lines pointing outward
+MAX_PATH_POINTS = 500  # Maximum number of points to store in the path
 
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
-GREEN = (0, 255, 0)
-
-# Create a map with 0s representing free space and 1s representing obstacles
-mapSize = (GRID_SIZE, GRID_SIZE)
-map = np.zeros(mapSize)
-
-# Add in obstacles where 1s represent obstacles
-# Instead of filling entire cells, draw lines
-obstacles = [
-    ((3, 0), (3, 5)),
-    ((0, 7), (5, 7)),
-    ((2, 1), (2, 1)),  # small line at a single point
-    ((5, 5), (5, 6)),
-]
-
-# Define exit point
-exit_point = (9, 9)
-
-print(map)
-
+# Robot class
 class Robot:
-    def __init__(self, startPosition, radius=0.5):
-        self.position = np.array(startPosition, dtype=float)
-        self.path = [startPosition]
-        self.radius = radius
-        self.orientation = 0  # Initially facing right (0 degrees)
-        self.image = pygame.image.load('car.png')
-        self.image = pygame.transform.scale(self.image, (CELL_SIZE, CELL_SIZE // 2))  # Match width, reduce height
-        self.image = pygame.transform.rotate(self.image, -90)  # Rotate to face up initially
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.angle = 0
+        self.speed = 0
+        self.acceleration = 0
+        self.path = []  # Use a list to store the path positions
 
-    def move(self, distance=0.1):
-        """Move in the current direction"""
-        angle_rad = math.radians(self.orientation)
-        direction_vector = np.array([math.cos(angle_rad), math.sin(angle_rad)])
-        newPosition = self.position + direction_vector * distance
+    def draw(self, screen, obstacles):
+        self.draw_heatmap(screen)  # Draw the heatmap before the robot
+        pygame.draw.circle(screen, (0, 0, 255), (int(self.x), int(self.y)), ROBOT_RADIUS, 1)
+        self.draw_lines(screen, obstacles)
+        self.draw_visor(screen, obstacles)
+        self.draw_path(screen)
 
-        # Check if the new position is within bounds and not an obstacle
-        if self.isValidPosition(self.position, newPosition):
-            self.position = newPosition
-            self.path.append(newPosition)
-            if len(self.path) > 3:
+    def draw_lines(self, screen, obstacles):
+        for i in range(NUM_LINES):
+            theta = 2.0 * math.pi * i / NUM_LINES
+            x = self.x + VISOR_RADIUS * math.cos(theta)
+            y = self.y + VISOR_RADIUS * math.sin(theta)
+            intersect_x, intersect_y = self.check_obstacle_intersection(x, y, obstacles)
+            pygame.draw.line(screen, (255, 255, 255), (self.x, self.y), (intersect_x, intersect_y))
+
+    def draw_visor(self, screen, obstacles):
+        points = [(self.x, self.y)]
+        for i in range(-VISOR_ANGLE // 2, VISOR_ANGLE // 2 + 1):
+            theta = math.radians(self.angle + i)
+            x = self.x + VISOR_RADIUS * math.cos(theta)
+            y = self.y + VISOR_RADIUS * math.sin(theta)
+            intersect_x, intersect_y = self.check_obstacle_intersection(x, y, obstacles)
+            points.append((intersect_x, intersect_y))
+        pygame.draw.polygon(screen, (0, 0, 255, 180), points)
+
+    def draw_path(self, screen):
+        if len(self.path) > 1:
+            pygame.draw.lines(screen, (0, 255, 0), False, [(int(pos[0]), int(pos[1])) for pos in self.path], 2)
+
+    def check_obstacle_intersection(self, x, y, obstacles):
+        for obstacle in obstacles:
+            if obstacle.line_intersects(self.x, self.y, x, y):
+                return obstacle.intersection_point(self.x, self.y, x, y)
+        return x, y
+
+    def update(self, obstacles):
+        next_x = self.x + self.speed * math.cos(math.radians(self.angle))
+        next_y = self.y + self.speed * math.sin(math.radians(self.angle))
+        if not self.collides_with_obstacles(next_x, next_y, obstacles):
+            self.x = next_x
+            self.y = next_y
+            self.path.append((self.x, self.y))  # Append the current position to the path
+            if len(self.path) > MAX_PATH_POINTS:  # Limit the number of points in the path
                 self.path.pop(0)
-            return True
-        else:
-            return False
+        self.speed *= FRICTION
+        self.keep_in_bounds()
 
-    def set_angle(self, angle):
-        """Set the robot's orientation angle"""
-        self.orientation = angle
+    def collides_with_obstacles(self, x, y, obstacles):
+        for obstacle in obstacles:
+            if obstacle.circle_collides(x, y, ROBOT_RADIUS):
+                return True
+        return False
 
-    def isValidPosition(self, start, end):
-        """Checks if the path from start to end intersects with any obstacles and is within bounds"""
-        # Check boundaries
-        if not (0 <= end[0] < GRID_SIZE and 0 <= end[1] < GRID_SIZE):
-            return False
+    def keep_in_bounds(self):
+        if self.x < 0: self.x = 0
+        if self.x > WIDTH - UI_WIDTH: self.x = WIDTH - UI_WIDTH
+        if self.y < 0: self.y = 0
+        if self.y > HEIGHT: self.y = HEIGHT
 
-        for obstacle_start, obstacle_end in obstacles:
-            if self.line_intersection(start, end, obstacle_start, obstacle_end):
-                return False
-        return True
+    def draw_heatmap(self, screen):
+        max_visits = max(self.path.count(pos) for pos in set(self.path))  # Get the maximum visit count
+        for pos in set(self.path):
+            count = self.path.count(pos)
+            red = min(255, int(255 * count / max_visits))
+            green = 255 - red
+            color = (red, green, 0, 128)
+            pygame.draw.circle(screen, color, (int(pos[0]), int(pos[1])), ROBOT_RADIUS)
 
-    def line_intersection(self, p1, p2, p3, p4):
-        """Check if line segment p1-p2 intersects with line segment p3-p4"""
-        def ccw(A, B, C):
-            return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
-        return ccw(p1, p3, p4) != ccw(p2, p3, p4) and ccw(p1, p2, p3) != ccw(p1, p2, p4)
+# Obstacle class
+class Obstacle:
+    def __init__(self, x, y, size):
+        self.x = x
+        self.y = y
+        self.size = size
 
     def draw(self, screen):
-        for p in self.path:
-            pygame.draw.circle(screen, BLUE, (int(p[1] * CELL_SIZE + CELL_SIZE // 2), int(p[0] * CELL_SIZE + CELL_SIZE // 2)), int(self.radius * CELL_SIZE), 1)
+        pygame.draw.rect(screen, (255, 255, 255), (self.x, self.y, self.size, self.size))
 
-        # Draw the car image
-        rotated_image = pygame.transform.rotate(self.image, -self.orientation)
-        rect = rotated_image.get_rect(center=(self.position[1] * CELL_SIZE + CELL_SIZE // 2, self.position[0] * CELL_SIZE + CELL_SIZE // 2))
-        screen.blit(rotated_image, rect.topleft)
+    def circle_collides(self, x, y, radius):
+        # Check if the circle collides with the obstacle
+        closest_x = max(self.x, min(x, self.x + self.size))
+        closest_y = max(self.y, min(y, self.y + self.size))
+        distance_x = x - closest_x
+        distance_y = y - closest_y
+        return (distance_x ** 2 + distance_y ** 2) < (radius ** 2)
 
-def draw_screen(screen, robot):
-    screen.fill(BLACK)
+    def line_intersects(self, x1, y1, x2, y2):
+        # Check if the line intersects any of the sides of the obstacle
+        return (self.line_intersects_side(x1, y1, x2, y2, self.x, self.y, self.x + self.size, self.y) or
+                self.line_intersects_side(x1, y1, x2, y2, self.x, self.y, self.x, self.y + self.size) or
+                self.line_intersects_side(x1, y1, x2, y2, self.x + self.size, self.y, self.x + self.size, self.y + self.size) or
+                self.line_intersects_side(x1, y1, x2, y2, self.x, self.y + self.size, self.x + self.size, self.y + self.size))
 
-    # Draw the obstacles as lines
-    for start, end in obstacles:
-        start_pos = (start[1] * CELL_SIZE + CELL_SIZE // 2, start[0] * CELL_SIZE + CELL_SIZE // 2)
-        end_pos = (end[1] * CELL_SIZE + CELL_SIZE // 2, end[0] * CELL_SIZE + CELL_SIZE // 2)
-        pygame.draw.line(screen, WHITE, start_pos, end_pos, LINE_WIDTH)
+    def line_intersects_side(self, x1, y1, x2, y2, x3, y3, x4, y4):
+        # Calculate intersection of two lines (x1,y1)-(x2,y2) and (x3,y3)-(x4,y4)
+        denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
+        if denom == 0:
+            return False
+        ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
+        ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
+        if 0 <= ua <= 1 and 0 <= ub <= 1:
+            return True
+        return False
 
-    # Draw the robot
-    robot.draw(screen)
+    def intersection_point(self, x1, y1, x2, y2):
+        # Calculate intersection point of the line (x1,y1)-(x2,y2) with the obstacle
+        points = []
+        sides = [(self.x, self.y, self.x + self.size, self.y),
+                 (self.x, self.y, self.x, self.y + self.size),
+                 (self.x + self.size, self.y, self.x + self.size, self.y + self.size),
+                 (self.x, self.y + self.size, self.x + self.size, self.y + self.size)]
+        for x3, y3, x4, y4 in sides:
+            denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
+            if denom == 0:
+                continue
+            ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
+            ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
+            if 0 <= ua <= 1 and 0 <= ub <= 1:
+                ix = x1 + ua * (x2 - x1)
+                iy = y1 + ua * (y2 - y1)
+                points.append((ix, iy))
+        if points:
+            # Return the closest intersection point
+            return min(points, key=lambda p: math.dist((x1, y1), p))
+        return x2, y2
 
-    pygame.display.flip()
-    time.sleep(0.0001)
+# Function to calculate angle
+def calculate_angle(robot, mouse_pos):
+    dx = mouse_pos[0] - robot.x
+    dy = mouse_pos[1] - robot.y
+    return math.degrees(math.atan2(dy, dx))
 
-# Initialize the robot at the starting position (0, 0)
-robot = Robot(startPosition=(0, 0))
+# Function to draw UI
+def draw_ui(screen, robot):
+    pygame.draw.rect(screen, (50, 50, 50), (WIDTH - UI_WIDTH, 0, UI_WIDTH, HEIGHT))
+    font = pygame.font.Font(None, 36)
+    direction_text = font.render(f'Direction: {robot.angle:.2f}°', True, (255, 255, 255))
+    screen.blit(direction_text, (WIDTH - UI_WIDTH + 10, HEIGHT - 30))
+    position_text = font.render(f'Position: ({int(robot.x)}, {int(robot.y)})', True, (255, 255, 255))
+    screen.blit(position_text, (WIDTH - UI_WIDTH + 10, HEIGHT - 60))
+    acceleration_text = font.render(f'Acceleration: {robot.acceleration:.2f}', True, (255, 255, 255))
+    screen.blit(acceleration_text, (WIDTH - UI_WIDTH + 10, HEIGHT - 90))
 
-# Initialize Pygame screen
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Robot Maze Control")
-clock = pygame.time.Clock()
+def initialize_pygame():
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Robot Simulator")
+    return screen, pygame.time.Clock()
 
-# Main loop to handle events and update the screen
-running = True
-while running:
+def create_robot_and_obstacles():
+    robot = Robot((WIDTH - UI_WIDTH) // 2, HEIGHT // 2)
+    obstacles = [
+        Obstacle(100, 100, OBSTACLE_SIZE),
+        Obstacle(200, 200, OBSTACLE_SIZE),
+        Obstacle(300, 300, OBSTACLE_SIZE),
+        Obstacle(400, 400, OBSTACLE_SIZE),
+        Obstacle(500, 500, OBSTACLE_SIZE)
+    ]
+    return robot, obstacles
+
+def handle_events():
+    global mouse_pos, accelerate
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = False
+            return False
+        elif event.type == pygame.MOUSEMOTION:
+            mouse_pos = event.pos
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE:
-                robot.move()  # Move in the current direction
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_x, mouse_y = event.pos
-            dx = mouse_x - (robot.position[1] * CELL_SIZE + CELL_SIZE // 2)
-            dy = mouse_y - (robot.position[0] * CELL_SIZE + CELL_SIZE // 2)
-            angle = math.degrees(math.atan2(dy, dx))
-            robot.set_angle(angle)
+                accelerate = True
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_SPACE:
+                accelerate = False
+    return True
 
-    draw_screen(screen, robot)
-    clock.tick(FPS)
+def update_robot(robot, obstacles):
+    robot.angle = calculate_angle(robot, mouse_pos)
+    if accelerate:
+        robot.acceleration = ACCELERATION
+        robot.speed += ACCELERATION
+    else:
+        robot.acceleration = 0
+    robot.update(obstacles)
 
-pygame.quit()
+def draw(screen, robot, obstacles):
+    screen.fill((0, 0, 0))
+    robot.draw(screen, obstacles)
+    for obstacle in obstacles:
+        obstacle.draw(screen)
+    draw_ui(screen, robot)
+    pygame.display.flip()
+
+def main():
+    screen, clock = initialize_pygame()
+    robot, obstacles = create_robot_and_obstacles()
+    global mouse_pos, accelerate
+    mouse_pos = (WIDTH // 2, HEIGHT // 2)
+    accelerate = False
+
+    running = True
+    while running:
+        running = handle_events()
+        update_robot(robot, obstacles)
+        draw(screen, robot, obstacles)
+        clock.tick(60)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
