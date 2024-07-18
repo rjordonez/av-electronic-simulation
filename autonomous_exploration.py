@@ -1,6 +1,7 @@
 import pygame
 import math
 import random
+from collections import defaultdict
 
 # Constants
 WIDTH, HEIGHT = 1000, 600
@@ -15,6 +16,8 @@ NUM_LINES = 20
 MAX_PATH_POINTS = 500
 BOUNDARY_RECT = (50, 50, WIDTH - 100, HEIGHT - 100)
 GOAL_AREA = (WIDTH - 150, HEIGHT - 150, 100, 100)
+GRID_SIZE = 10
+
 class Robot:
     def __init__(self, x, y):
         self.x = x
@@ -22,6 +25,13 @@ class Robot:
         self.angle = 0
         self.speed = 0
         self.path = []
+        self.visited = defaultdict(bool)
+        self.quadrant_counts = {
+            "top-left": 0,
+            "top-right": 0,
+            "bottom-left": 0,
+            "bottom-right": 0
+        }
 
     def update(self, obstacles):
         if self.speed < 2:
@@ -49,6 +59,7 @@ class Robot:
             self.path.append((self.x, self.y))
             if len(self.path) > MAX_PATH_POINTS:
                 self.path.pop(0)
+            self.mark_visited()
         self.speed *= FRICTION
 
     def detect_frontiers(self, obstacles):
@@ -69,6 +80,29 @@ class Robot:
             if obstacle.circle_collides(x, y, ROBOT_RADIUS):
                 return True
         return False
+
+    def mark_visited(self):
+        radius_in_cells = int(ROBOT_RADIUS // GRID_SIZE)
+        for i in range(-radius_in_cells, radius_in_cells + 1):
+            for j in range(-radius_in_cells, radius_in_cells + 1):
+                if math.sqrt(i**2 + j**2) * GRID_SIZE <= ROBOT_RADIUS:
+                    grid_x = int((self.x // GRID_SIZE) + i)
+                    grid_y = int((self.y // GRID_SIZE) + j)
+                    self.visited[(grid_x, grid_y)] = True
+                    self.update_quadrant_count(grid_x, grid_y)
+
+    def update_quadrant_count(self, grid_x, grid_y):
+        if grid_x < WIDTH // (2 * GRID_SIZE) and grid_y < HEIGHT // (2 * GRID_SIZE):
+            self.quadrant_counts["top-left"] += 1
+        elif grid_x >= WIDTH // (2 * GRID_SIZE) and grid_y < HEIGHT // (2 * GRID_SIZE):
+            self.quadrant_counts["top-right"] += 1
+        elif grid_x < WIDTH // (2 * GRID_SIZE) and grid_y >= HEIGHT // (2 * GRID_SIZE):
+            self.quadrant_counts["bottom-left"] += 1
+        elif grid_x >= WIDTH // (2 * GRID_SIZE) and grid_y >= HEIGHT // (2 * GRID_SIZE):
+            self.quadrant_counts["bottom-right"] += 1
+
+    def get_most_explored_quadrant(self):
+        return max(self.quadrant_counts, key=self.quadrant_counts.get)
 
     def draw(self, screen, obstacles):
         pygame.draw.circle(screen, (0, 0, 255), (int(self.x), int(self.y)), ROBOT_RADIUS, 0)
@@ -135,15 +169,34 @@ def reshuffle_obstacles(robot, obstacles):
     robot.x = (WIDTH - UI_WIDTH) // 2
     robot.y = HEIGHT // 2
     robot.path = []
+    robot.visited.clear()
+    robot.quadrant_counts = {
+        "top-left": 0,
+        "top-right": 0,
+        "bottom-left": 0,
+        "bottom-right": 0
+    }
     for ob in obstacles:
         ob.x = random.randint(50, WIDTH - 50 - OBSTACLE_SIZE)
         ob.y = random.randint(50, HEIGHT - 50 - OBSTACLE_SIZE)
 
-def draw(screen, robot, obstacles):
+def draw_sparse_matrix(screen, visited, opacity):
+    overlay = pygame.Surface((WIDTH, HEIGHT))
+    overlay.set_alpha(opacity)
+    overlay.fill((0, 0, 0))
+    for (grid_x, grid_y), is_visited in visited.items():
+        if is_visited:
+            x = grid_x * GRID_SIZE
+            y = grid_y * GRID_SIZE
+            pygame.draw.rect(overlay, (255, 255, 255), (x, y, GRID_SIZE, GRID_SIZE))
+    screen.blit(overlay, (0, 0))
+
+def draw(screen, robot, obstacles, sparse_matrix_opacity):
     screen.fill((0, 0, 0))
     # Draw boundary and goal area
     pygame.draw.rect(screen, (255, 255, 255), BOUNDARY_RECT, 2)  # Boundary
     pygame.draw.rect(screen, (0, 255, 0), GOAL_AREA)  # Goal area
+    draw_sparse_matrix(screen, robot.visited, sparse_matrix_opacity)
     robot.draw(screen, obstacles)
     for obstacle in obstacles:
         obstacle.draw(screen)
@@ -151,6 +204,9 @@ def draw(screen, robot, obstacles):
     font = pygame.font.Font(None, 36)
     position_text = font.render(f'Position: ({int(robot.x)}, {int(robot.y)})', True, (255, 255, 255))
     screen.blit(position_text, (WIDTH - 500, 10))
+    # Display most explored quadrant
+    most_explored_text = font.render(f'Most Explored: {robot.get_most_explored_quadrant()}', True, (255, 255, 255))
+    screen.blit(most_explored_text, (WIDTH - 500, 50))
     pygame.display.flip()
 
 def main():
@@ -158,6 +214,7 @@ def main():
     robot, obstacles = create_robot_and_obstacles()
 
     running = True
+    sparse_matrix_opacity = 50  # Low opacity
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -165,8 +222,14 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
                     reshuffle_obstacles(robot, obstacles)
+                elif event.key == pygame.K_s:
+                    sparse_matrix_opacity = 200  # Full opacity
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_s:
+                    sparse_matrix_opacity = 50  # Low opacity
+
         robot.update(obstacles)
-        draw(screen, robot, obstacles)
+        draw(screen, robot, obstacles, sparse_matrix_opacity)
         clock.tick(60)
 
     pygame.quit()
