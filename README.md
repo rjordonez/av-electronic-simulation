@@ -7,3 +7,5 @@ autonomous navigation 2: refined movement to allow for continuous movement in th
 autonomous navigation 3: A* path finding implemented, tracks path and detected obstacles on path, random map generator
 
 autonomous navigation 4: implemented a simple version of frontier-based exploration choosing only the closest frontier for robot to build its own map
+
+autonomous navigation 5: implemented a cost map for frontier-based exploration. punishes previously visited nodes encouraging forward movement. implemented metric trackers
