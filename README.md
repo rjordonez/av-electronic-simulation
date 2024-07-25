@@ -9,3 +9,5 @@ autonomous navigation 3: A* path finding implemented, tracks path and detected o
 autonomous navigation 4: implemented a simple version of frontier-based exploration choosing only the closest frontier for robot to build its own map
 
 autonomous navigation 5: implemented a cost map for frontier-based exploration. punishes previously visited nodes encouraging forward movement. implemented metric trackers
+
+autonomous navigation 6: introduced map assumptions by robot. robot samples points in assumed space and chooses the furthest one from the current path. traverses to that path using dynamic A*. when there are no sampled points (don't meet criteria of not being pruned), it falls back to frontier-based exploration with the cost map
