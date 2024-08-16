@@ -1,13 +1,13 @@
-Autonomous Exploration and Mapping Simulation
+**Autonomous Exploration and Mapping Simulation**
 This project simulates an autonomous robot exploring and mapping an unknown environment using Pygame and Numpy. The robot navigates through a grid-based map, sensing obstacles and free spaces, and continuously updates its internal map while making decisions on where to explore next.
 
-Features
+**Features**
 Random Map Generation: The environment is randomly generated with a specified number of obstacles and boundary walls.
 Autonomous Robot: The robot autonomously explores the environment, updating its internal map as it moves.
 Pathfinding: The robot uses the A* algorithm for pathfinding to reach unexplored areas or avoid obstacles.
 Pygame Visualization: The environment, robot, and its path are visualized in a Pygame window.
 Installation
-Clone the repository:
+**Clone the repository:**
 
 bash
 Copy code
@@ -26,7 +26,7 @@ Copy code
 python simulation.py
 The simulation will run for 5 iterations, with the robot exploring a different randomly generated map in each iteration.
 
-Code Overview
+**Code Overview**
 Constants:
 
 UNKNOWN, FREE_SPACE, OBSTACLE define the different states of the map grid cells.
@@ -49,6 +49,6 @@ Sensor Range: Change the sensorRange attribute in the Robot class to adjust how 
 License
 This project is licensed under the MIT License. See the LICENSE file for details.
 
-Acknowledgments
+**Acknowledgments**
 This project was developed using Pygame and Numpy. Special thanks to the open-source community for providing these powerful tools.
 
