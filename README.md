@@ -11,7 +11,7 @@ Installation
 
 bash
 Copy code
-git clone https://github.com/yourusername/autonomous-exploration-simulation.git
+git clone **https://github.com/rjordonez/autonomous-exploration-simulation.git**
 cd autonomous-exploration-simulation
 Install the required dependencies:
 
