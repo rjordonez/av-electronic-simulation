@@ -1,17 +1,20 @@
-**Autonomous Exploration and Mapping Simulation**
-This project simulates an autonomous robot exploring and mapping an unknown environment using Pygame and Numpy. The robot navigates through a grid-based map, sensing obstacles and free spaces, and continuously updates its internal map while making decisions on where to explore next.
+# **Autonomous Exploration and Mapping Simulation**
 
-**Features**
-Random Map Generation: The environment is randomly generated with a specified number of obstacles and boundary walls.
-Autonomous Robot: The robot autonomously explores the environment, updating its internal map as it moves.
-Pathfinding: The robot uses the A* algorithm for pathfinding to reach unexplored areas or avoid obstacles.
-Pygame Visualization: The environment, robot, and its path are visualized in a Pygame window.
-Installation
-**Clone the repository:**
+This project simulates an autonomous robot exploring and mapping an unknown environment using **Pygame** and **Numpy**. The robot navigates through a grid-based map, sensing obstacles and free spaces, and continuously updates its internal map while making decisions on where to explore next.
 
-bash
-Copy code
-git clone **https://github.com/rjordonez/autonomous-exploration-simulation.git**
+## **Features**
+
+- **Random Map Generation**: The environment is randomly generated with a specified number of obstacles and boundary walls.
+- **Autonomous Robot**: The robot autonomously explores the environment, updating its internal map as it moves.
+- **Pathfinding**: The robot uses the **A\*** algorithm for pathfinding to reach unexplored areas or avoid obstacles.
+- **Pygame Visualization**: The environment, robot, and its path are visualized in a Pygame window.
+
+## **Installation**
+
+### **Clone the repository:**
+
+```bash
+git clone https://github.com/yourusername/autonomous-exploration-simulation.git
 cd autonomous-exploration-simulation
 Install the required dependencies:
 
